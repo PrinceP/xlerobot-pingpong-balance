@@ -116,6 +116,7 @@ def main():
     ap.add_argument("--max-dev", type=float, default=25, help="stop if any joint target goes this many degrees from home")
     ap.add_argument("--max-ball", type=float, default=6.5, help="stop if the ball estimate is this many cm from the centre")
     ap.add_argument("--lost", type=int, default=10, help="hold still after this many frames without the ball")
+    ap.add_argument("--max-temp", type=int, default=65, help="stop if any motor reaches this many C (the STS3215 cuts its torque at ~70 C)")
     ap.add_argument("--kp", type=int, default=32, help="servo P gain (LeRobot default 16: my arm sagged 4-7 deg and ignored small commands)")
     ap.add_argument("--grip-load", type=int, default=100, help="gripper squeeze target: servo load in 0.1%% units (100 = 10%%; the overload protection trips at ~20%%); 0 = no squeeze")
     ap.add_argument("--grip-open", type=float, default=40, help="how far the gripper opens to insert the paddle, in %% of its calibrated range")
@@ -232,6 +233,11 @@ def main():
         bias = goal - home
         q0 = read()
         print(f"at home: joints off by {np.round(q0 - home, 1)} deg, holding with sag compensation {np.round(bias, 1)} deg")
+        if np.any(np.abs(q0 - home) > 5):
+            temps = bus.sync_read("Present_Temperature", normalize=False)
+            bus.disconnect(False); stop[0] = True
+            raise SystemExit(f"a joint cannot reach home (blocked, or a motor lost torque: temperatures {temps} C). Not starting. "
+                             "Check the arm; release it with hardware.torque_off.")
 
     if a.jog:
         try:
@@ -265,9 +271,16 @@ def main():
         print(f"recording the first {a.record:.0f} s to {rec_path}")
     print("ARMED: put the ball on the blade centre (it starts as soon as it sees the ball 5 frames in a row). Runs until Ctrl+C.")
     t_start = t0 = last_print = time.perf_counter()
+    n_tick = 0
     try:
         while a.seconds <= 0 or time.perf_counter() - t_start < a.seconds:
             tick = time.perf_counter()
+            n_tick += 1
+            if not a.dry and n_tick % HZ == 0:  # once a second: holding a pose against gravity heats the shoulder (XLeRobot left arm hit 71 C)
+                temps = bus.sync_read("Present_Temperature", normalize=False)
+                if max(temps.values()) >= a.max_temp:
+                    why = f"motor too hot: {temps} C. Hold the arm and run hardware.torque_off, let it cool"
+                    break
             q = read(); dt = tick - t_prev
             qd = 0.7 * qd + 0.3 * np.radians(q - q_prev) / max(dt, 1e-3); q_prev, t_prev = q, tick
             frame = latest["f"]
