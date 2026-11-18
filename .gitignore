@@ -32,3 +32,4 @@ dist/
 Thumbs.db
 /hardware/home_left.json
 /hardware/home_right.json
+/hardware/home_*.prev.json

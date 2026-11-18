@@ -3,6 +3,7 @@
     python -m hardware.jog --arm right wrist_flex=-12             # absolute
     python -m hardware.jog --arm right --rel wrist_roll=+90         # relative to now
     python -m hardware.jog --arm right                              # only print the joint readings
+    python -m hardware.jog --arm right --rel wrist_flex=-1 --save-home   # nudge, then save the pose as this arm's home
 
 Stops early and holds where it is if a joint falls behind its command by more than --max-lag degrees (blocked by something).
 """
@@ -26,8 +27,11 @@ def main():
     ap.add_argument("--rel", action="store_true", help="values are offsets from the current reading")
     ap.add_argument("--speed", type=float, default=20.0, help="degrees per second")
     ap.add_argument("--max-lag", type=float, default=15.0)
+    ap.add_argument("--save-home", action="store_true", help="after moving, save the pose to the arm's home file (needs --arm)")
     add_arm_arg(ap)
     a = apply_arm(ap.parse_args(), ap)
+    if a.save_home and not a.arm:
+        raise SystemExit("--save-home needs --arm")
 
     robot = SOFollower(SOFollowerRobotConfig(port=a.port, id=a.id, disable_torque_on_disconnect=False))
     bus = robot.bus
@@ -36,7 +40,7 @@ def main():
     try:
         q0 = read()
         print("now   " + "  ".join(f"{j} {q0[j]:+.1f}" for j in JOINTS))
-        if not a.targets:
+        if not a.targets and not a.save_home:
             return
         tgt = dict(q0)
         for item in a.targets:
@@ -59,9 +63,27 @@ def main():
                 bus.sync_write("Goal_Position", {j: float(q[j]) for j in JOINTS})
                 print(f"STOPPED: {worst} is {lag[worst]:+.1f} deg behind its command (blocked?). Holding here.")
                 break
+        else:
+            # servos sag and ignore small commands under load: nudge the command until the readings sit on the target (as run_real's sag compensation)
+            arm = [j for j in JOINTS if j != "gripper"]
+            goal = {j: float(tgt[j]) for j in JOINTS}
+            for _ in range(60):
+                q = read()
+                for j in arm:
+                    goal[j] = tgt[j] + float(np.clip(goal[j] - tgt[j] + 0.25 * (tgt[j] - q[j]), -12, 12))
+                bus.sync_write("Goal_Position", goal)
+                time.sleep(1 / 30)
         time.sleep(0.5)
         q = read()
         print("now   " + "  ".join(f"{j} {q[j]:+.1f}" for j in JOINTS))
+        if a.save_home:
+            import json
+            from hardware.xlerobot import home_path
+            old = home_path(a.arm).read_text() if home_path(a.arm).exists() else None
+            if old:
+                home_path(a.arm).with_suffix(".prev.json").write_text(old)
+            home_path(a.arm).write_text(json.dumps({f"{j}.pos": float(q[j]) for j in JOINTS}, indent=1))
+            print(f"saved home to {home_path(a.arm)}" + (" (previous kept as .prev.json)" if old else ""))
     finally:
         bus.disconnect(False)  # torque stays on
 
