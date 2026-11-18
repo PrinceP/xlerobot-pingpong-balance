@@ -116,6 +116,9 @@ def main():
     ap.add_argument("--max-dev", type=float, default=25, help="stop if any joint target goes this many degrees from home")
     ap.add_argument("--max-ball", type=float, default=6.5, help="stop if the ball estimate is this many cm from the centre")
     ap.add_argument("--lost", type=int, default=10, help="hold still after this many frames without the ball")
+    ap.add_argument("--start-frames", type=int, default=15, help="start control after the ball rests near the centre for this many frames")
+    ap.add_argument("--start-radius", type=float, default=2.5, help="cm from the blade centre counted as 'near the centre' for the start")
+    ap.add_argument("--start-speed", type=float, default=3.0, help="cm/s below which the ball counts as resting for the start")
     ap.add_argument("--max-temp", type=int, default=65, help="stop if any motor reaches this many C (the STS3215 cuts its torque at ~70 C)")
     ap.add_argument("--kp", type=int, default=32, help="servo P gain (LeRobot default 16: my arm sagged 4-7 deg and ignored small commands)")
     ap.add_argument("--grip-load", type=int, default=100, help="gripper squeeze target: servo load in 0.1%% units (100 = 10%%; the overload protection trips at ~20%%); 0 = no squeeze")
@@ -269,7 +272,7 @@ def main():
         rec_path = out / f"real_{a.arm or 'arm'}_{time.strftime('%H%M%S')}.mp4"
         rec = cv2.VideoWriter(str(rec_path), cv2.VideoWriter_fourcc(*"mp4v"), HZ, (w, h))
         print(f"recording the first {a.record:.0f} s to {rec_path}")
-    print("ARMED: put the ball on the blade centre (it starts as soon as it sees the ball 5 frames in a row). Runs until Ctrl+C.")
+    print(f"ARMED: put the ball on the blade centre and take your hand away (it starts once the ball rests there for {a.start_frames} frames). Runs until Ctrl+C.")
     t_start = t0 = last_print = time.perf_counter()
     n_tick = 0
     try:
@@ -295,8 +298,11 @@ def main():
             act = np.zeros(5, np.float32)
             if armed:
                 on_blade = det[3] > 0 and abs(det[0] - 0.2) < 0.25  # ignores a ball held elsewhere in view
-                seen_run = seen_run + 1 if on_blade else 0
-                if seen_run >= 5:
+                # start only on a ball that rests near the centre: a hand placing it is in view (and a white detector sees skin),
+                # and starting on that gives a wrong estimate, a jerk, and a ball thrown off
+                still = np.hypot(*b[:2]) * 8 < a.start_radius and np.hypot(*b[2:]) * 50 < a.start_speed  # FdVel velocity is in units of 0.5 m/s
+                seen_run = seen_run + 1 if on_blade and still else 0
+                if seen_run >= a.start_frames:
                     armed, t0, lost = False, time.perf_counter(), 0
                     print(f"\nCONTROL ON  (ball at u {b[0]*8:+.1f} w {b[1]*8:+.1f} cm)", flush=True)
             else:
