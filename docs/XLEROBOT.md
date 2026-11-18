@@ -1,53 +1,82 @@
-# Porting to XLeRobot: two arms, two paddles, two balls
+# Running the balancer on XLeRobot: what changed and why
 
-Goal: each XLeRobot arm holds a table-tennis paddle by its handle and balances a ping-pong ball, both arms at the same time.
+Both XLeRobot arms hold a standard table-tennis paddle (wooden handle) and balance a white 40 mm ball, each with its own process, serial
+port and wrist camera. zecice's controller and estimator weights are used unchanged. These are the things that had to change, in the
+order we hit them.
 
-## Robot facts that matter here
+## Robot
 
 | | Left arm | Right arm |
 |---|---|---|
-| Serial bus (on the Orin) | `/dev/ttyACM0`, motor IDs 1-6 (head motors 7-8 share the bus) | `/dev/ttyACM1`, motor IDs 1-6 (wheels 7-9 share the bus) |
-| Wrist camera | `wrist_b` (`/dev/video4`, unconfirmed) | `wrist_a` (`/dev/video2`, confirmed) |
+| Serial bus | `/dev/ttyACM0`, motor IDs 1-6 (head motors 7-8 share the bus) | `/dev/ttyACM1`, motor IDs 1-6 (wheels 7-9 share the bus) |
+| Wrist camera | USB port `2.4` (`/dev/v4l/by-path/...usb-0:2.4:1.0-video-index0`) | USB port `2.2` |
+| Calibration id | `xlerobot_left` | `xlerobot_right` |
 
-- Compute: Jetson Orin, conda env `xlerobot` (Python 3.12, lerobot 0.7.0, torch 2.x CPU). The controller and estimator are tiny MLPs, so CPU is enough.
-- All three cameras share one USB 2.0 hub. 640x480 fails on one wrist camera; 320x240 MJPG works for all three. The pipeline resizes to 128x96
-  anyway, so 320x240 costs nothing.
-- Each arm process owns its serial port, so the XLeRobot bridge/host must be stopped while balancing (`make stop` in xlerobot-ops).
+Robot computer: Jetson Orin, Python 3.12, lerobot 0.7.0, torch on CPU. The MLPs are tiny; CPU is plenty.
 
-## Differences from the original setup, and the plan for each
+## 1. Calibration
 
-1. **Arm calibration (blocker).** The current XLeRobot calibration has `shoulder_lift` and `elbow_flex` spanning the full encoder circle
-   (0-4095), so the usable range ends at the folded rest pose. Recalibrate with the arms in the middle pose (`make calibrate` in xlerobot-ops)
-   before anything else.
-2. **Calibration format.** The original loop uses LeRobot `SOFollower` (one arm per port, joint values in degrees, calibration file per arm id).
-   XLeRobot keeps one combined file (`left_arm_*`, `right_arm_*`, `head_*`, `base_*`). Plan: a small script that splits it into two
-   `so_follower` calibration files (`xlerobot_left`, `xlerobot_right`) for motor IDs 1-6 on each port, so `run_real.py` works per arm with
-   `--port`, `--id` and `--cam`, unchanged.
-3. **Ball colour.** The detector looks for an orange ball. Ours is white (STAG). Options:
-   - buy orange 40 mm balls (no code change, matches the tested detector), or
-   - add a `--ball white` detector (low saturation, high value). Risk: white walls and the white printed arm parts behind the blade.
-   The estimator only sees `[x, y, r, visible]`, so a different detector does not need retraining if its output matches.
-4. **Paddle and grip.** Our paddles are standard shakehand paddles with wooden handles. The original clamps the handle in the gripper,
-   blade edge-on to the wrist camera, squeezed by load (~10%). Same here. The sim paddle is 90 g. Weigh ours: a heavier paddle may need
-   `--kp` tuning or a retrain with the real mass.
-5. **Home pose per arm.** `hardware.pose_guide` once per arm (level blade), saved as `hardware/home_left.json` and `hardware/home_right.json`.
-6. **Joint signs per arm.** Run `--jog` and `--tilt-test` on each arm. Both arms are the same SO-101 build, but check that neither is mirrored.
-7. **Both at once.** Two processes, one per arm (separate port, camera and log). A wrapper starts both and stops both on Ctrl+C.
-8. **Dependencies on the Orin.** `sim/env.py` (for `FdVel`) imports `mujoco` and `gymnasium`. Install them into the Orin env
-   (`pip install mujoco==3.17.0 gymnasium`), or move `FdVel` to a module without the sim imports.
-9. **LeRobot version.** Upstream pins `lerobot<0.7`, the Orin has 0.7.0. Check the `SOFollower` API (`position_p_coefficient`,
-   `disable_torque_on_disconnect`, `max_relative_target`) on 0.7.0.
+- **Middle pose matters.** A first XLeRobot calibration done with the arms folded at rest gave `shoulder_lift` and `elbow_flex` a range of
+  0-4095 (the whole encoder circle), so the usable range ended at the rest pose. Recalibrate with each arm in the middle pose (upper arm up,
+  forearm forward, wrist straight).
+- **One file per arm.** XLeRobot keeps one combined calibration file; the balancer uses LeRobot's `SOFollower` (one arm, IDs 1-6).
+  `python -m hardware.xlerobot split-calib` copies the values unchanged into `so_follower/xlerobot_left.json` and `xlerobot_right.json`,
+  so they match what is in the motors and no recalibration prompt appears.
 
-## Order of work
+## 2. Wrist cameras (Innomaker U20CAM, three on one USB 2.0 hub)
 
-1. Recalibrate both arms (xlerobot-ops `make calibrate`).
-2. Split the calibration into per-arm `so_follower` files; check `hardware.torque_off --id xlerobot_left --port /dev/ttyACM0`.
-3. Ball detector: orange ball or `--ball white`; check detections on live wrist-camera frames.
-4. One arm (right first, its wrist camera is confirmed): `--grip-only`, `pose_guide`, `--jog`, `--tilt-test`, then balance.
-5. Left arm, the same steps.
-6. Both arms together.
+- All three report the same serial number: select them by USB port (`/dev/v4l/by-path`), not by id or `/dev/videoN`.
+- **No 320x240 mode.** OpenCV silently falls back to 640x360 (16:9), which would distort the 4:3 image the estimator was trained on. Use
+  640x480 MJPG.
+- **Buffer size 1 halves the frame rate** on these cameras (15 fps). Buffer 2 gives 29.6 fps on both wrist cameras at once.
+- Auto exposure's dynamic frame rate is switched off (`exposure_dynamic_framerate=0`) so room light cannot lower the frame rate.
 
-## Safety
+The camera-to-paddle view matches zecice's sim closely once the paddle is clamped edge-on: blade as a vertical line near the image centre,
+ball on the image-right side at about x +0.2, y -0.2.
 
-The arm moves on its own and stays powered after the scripts exit. Keep clear, keep Ctrl+C ready, hold the arm before `torque_off`.
-Never command the gripper fully closed on the handle (stall trips the servo overload protection).
+## 3. White ball
+
+The detector looks for an orange ball; ours is white. `--ball white` thresholds low saturation and high brightness, which also matches white
+walls, the wooden handle, printed parts and skin. What made it work:
+
+- **Region of interest:** only the strip right of the blade line and above the handle, where a ball on the blade can be.
+- **Saturation up to 120:** the red rubber tints the ball pink. With a strict threshold (S<60) only a crescent of the ball was found, its
+  size shrank, and the ball was "lost" while it sat near the centre: most short attempts ended that way.
+- **Size calibration (`--r-corr`):** the estimator turns blob size into position along the blade (5-10% of size is ~1 cm). With the ball
+  resting at the centre, choose `--r-corr` so the estimate reads (0, 0). Ours: left 1.15, right 1.2.
+
+An orange ball would avoid all of this.
+
+## 4. Paddle grip and home pose
+
+- Clamp the handle deep in the jaws, blade edge-on to the wrist camera, the ball face on the camera's image-right side. Colour does not matter.
+- The wrist must be lifted ~90 deg (`hardware.jog`) before inserting the paddle: XLeRobot's cart is in the way at rest.
+- **Level the home pose with the ball.** Posed by eye, the blade was 9-10 deg off on both arms. Place the ball, nudge `wrist_flex` /
+  `wrist_roll` 1-2 deg at a time (`hardware.jog --rel`, which closes the loop on the readings), save when the ball rests. Do this with the
+  paddle clamped exactly as it will run: a re-clamp or an extra squeeze tips a round handle in the jaws by a degree or two.
+- Start runs with `--grip-load 0` (no extra squeeze) once the paddle is clamped.
+
+## 5. Servos
+
+- **P gain 64.** At zecice's 32, `shoulder_lift` moved only 15% of a 3 deg upward step on our arm (paddle and longer lever); at 64 every joint
+  tracks within 6% (`hardware.step_response`).
+- **Heat.** A home pose with the upper arm far forward made the left shoulder reach 71 C and trip its overheat cut-out (status flag 4); the
+  arm dropped. Keep the upper arm near upright (shoulder_lift near 0), release torque between runs, and let `run_real` stop at 65 C
+  (`--max-temp`). `hardware.temps` shows temperatures and fault flags.
+- `run_real` refuses to start if a joint cannot reach home within 5 deg (blocked, or a motor without torque).
+
+## 6. Two arms at once
+
+- One process per arm (`scripts/run_both.sh`). Each process ran ~20 busy torch threads; with two processes they starved each other.
+  `run_real` now uses one thread.
+- Control starts only when the ball rests near the centre for 0.5 s (`--start-frames/--start-radius/--start-speed`). Starting while the hand
+  placing the ball was still in view gave a wrong first estimate, a jerk, and a ball thrown toward the tip.
+- On start, `run_real` keeps the goals the arm already holds (with sag compensation), so it does not droop and roll a resting ball off.
+- Logs and recordings are named per arm (`logs/real_left_*.npz`, `logs/real_right_*.mp4`).
+
+## Not done yet
+
+- The tilt test (`--tilt-test`) was inconclusive on our arm: with a 3 deg tilt the residual level error dominated. Balancing works, so the
+  joint signs are right.
+- The sim wrist camera is zecice's (fovy 62); it was not refitted to the Innomaker camera. The estimator works with the size correction.
+- A retrain with our paddle mass and camera could improve the 2-3 cm steady offset seen on the right arm.

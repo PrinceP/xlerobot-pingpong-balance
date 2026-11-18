@@ -1,7 +1,14 @@
 # XLeRobot ping-pong ball balancing (two arms)
 
-Both SO-101 arms of an [XLeRobot](https://github.com/Vector-Wangel/XLeRobot) each hold a table-tennis paddle and balance a ping-pong
-ball on it, at the same time. Each arm senses its ball with its own wrist camera.
+Both SO-101 arms of an [XLeRobot](https://github.com/Vector-Wangel/XLeRobot) hold a table-tennis paddle each and balance a ping-pong ball
+on it, at the same time. Each arm senses its ball only with its own wrist camera. The controller is zecice's PPO policy, trained in
+MuJoCo and used here unchanged.
+
+**Videos (on X):** [video 1](https://x.com/x_princep/status/2122936066957017416) ·
+[video 2](https://x.com/x_princep/status/2122927733626024409)
+
+**Results on the real robot:** both arms balanced at the same time for over 100 s each (left 111 s, right 104 s, still going when
+stopped); the right arm alone balanced for 83 s. Pretrained weights, no retraining.
 
 > **Acknowledgement.** This project is built on [zecice/so101-pingpong-balance](https://github.com/zecice/so101-pingpong-balance)
 > by **zecice** (MIT): the MuJoCo environment, PPO controller, ball detector + estimator, pretrained weights and the real-arm loop
@@ -9,7 +16,25 @@ ball on it, at the same time. Each arm senses its ball with its own wrist camera
 > Additional asset credits: SO-101 model files by TheRobotStudio (Apache-2.0), paddle mesh by Samuel Galla and Tim Huber (MIT),
 > see `assets/so101/README.md`.
 
-What changes for XLeRobot is tracked in [docs/XLEROBOT.md](docs/XLEROBOT.md). The original README follows.
+## XLeRobot quick start
+
+Runs on the robot computer (a Jetson Orin here, CPU only). Stop the XLeRobot host/bridge first: these scripts need the arms' serial ports.
+Every hardware script takes `--arm left|right` (port, calibration, wrist camera, home file: see `hardware/xlerobot.py`).
+
+```bash
+python -m hardware.xlerobot split-calib                       # once per XLeRobot calibration: one SOFollower calibration per arm
+python -m hardware.jog --arm right wrist_flex=-12             # lift the wrist clear of the cart
+python -m hardware.jog --arm right wrist_roll=0 gripper=40    # centre the roll, open the gripper
+python -m hardware.run_real --arm right --grip-only --home /nonexistent  # o, insert the paddle edge-on to the camera, Enter: squeeze
+python -m hardware.pose_guide --arm right                     # arm goes limp: pose it upright with the paddle level, Ctrl+C saves home
+python -m hardware.jog --arm right --rel wrist_flex=-1        # level with the ball: nudge until it rests, then --save-home
+python -m hardware.run_real --arm right --ball white --kp 64 --r-corr 1.2 --grip-load 0   # balance
+python -m hardware.torque_off --arm right                     # hold the arm: it goes limp
+```
+Both arms at once: `LEFT_ARGS="--r-corr 1.15" RIGHT_ARGS="--r-corr 1.2" scripts/run_both.sh --ball white --kp 64 --grip-load 0`.
+Checks that move nothing: `hardware.ball_view` (detector on live frames), `hardware.temps` (motor temperatures and fault flags).
+
+What had to change for XLeRobot, and why, is in [docs/XLEROBOT.md](docs/XLEROBOT.md). The original README follows.
 
 ---
 
