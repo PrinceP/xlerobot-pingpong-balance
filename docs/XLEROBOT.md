@@ -1,8 +1,8 @@
 # Running the balancer on XLeRobot: what changed and why
 
 Both XLeRobot arms hold a standard table-tennis paddle (wooden handle) and balance a white 40 mm ball, each with its own process, serial
-port and wrist camera. zecice's controller and estimator weights are used unchanged. These are the things that had to change, in the
-order we hit them.
+port and wrist camera. zecice's controller and estimator weights are used unchanged. Result: both arms balanced at the same time for
+about 4 minutes (left 249 s, right 245 s). These are the things that had to change, in the order we hit them.
 
 ## Robot
 

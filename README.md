@@ -7,8 +7,8 @@ MuJoCo and used here unchanged.
 **Videos (on X):** [video 1](https://x.com/x_princep/status/2122936066957017416) ·
 [video 2](https://x.com/x_princep/status/2122927733626024409)
 
-**Results on the real robot:** both arms balanced at the same time for over 100 s each (left 111 s, right 104 s, still going when
-stopped); the right arm alone balanced for 83 s. Pretrained weights, no retraining.
+**Results on the real robot:** both arms balanced at the same time, each on its first attempt, for about 4 minutes (left 249 s,
+right 245 s). Pretrained weights, no retraining.
 
 > **Acknowledgement.** This project is built on [zecice/so101-pingpong-balance](https://github.com/zecice/so101-pingpong-balance)
 > by **zecice** (MIT): the MuJoCo environment, PPO controller, ball detector + estimator, pretrained weights and the real-arm loop
