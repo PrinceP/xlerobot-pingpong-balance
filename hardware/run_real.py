@@ -165,6 +165,10 @@ def main():
         print(f"(dry) arm is off home by {np.round(q0 - home, 1)} deg; a live run would first move it home")
     if not a.dry:
         g0 = bus.sync_read("Present_Position")["gripper"]  # include the gripper: a stale goal could open it
+        if bus.read("Torque_Enable", "gripper", normalize=False):
+            # torque already on (a previous run clamped the paddle): keep its squeezing goal. Goal = present would drop the squeeze
+            # until the prompt is answered, and a cantilevered paddle slides out of the jaws meanwhile (XLeRobot left arm did).
+            g0 = bus.read("Goal_Position", "gripper")
         bus.sync_write("Goal_Position", {**{j: float(v) for j, v in zip(JOINTS, q0)}, "gripper": float(g0)})  # torque still off: goal = present, so no jump
         robot.configure()  # gains (P=--kp, D=32), then torque ON holding q0
         print(f"torque ON (P={a.kp}), holding the current pose")
