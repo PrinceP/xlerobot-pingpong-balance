@@ -171,7 +171,8 @@ def main():
         if a.grip_load > 0:
             insert = ask("Paddle already in? Enter to keep it. To insert it, type o + Enter: ") == "o"
             if insert:
-                to_home()
+                if have_home:  # no saved home yet: stay put (the sim home is a large move from XLeRobot's rest pose)
+                    to_home()
                 g = float(bus.sync_read("Present_Position")["gripper"])
                 for v in np.linspace(g, max(g, a.grip_open), 30):
                     bus.write("Goal_Position", "gripper", float(v)); time.sleep(1 / 30)
