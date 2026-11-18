@@ -15,13 +15,13 @@ import numpy as np
 # parts, so check it on live frames (python -m hardware.ball_view) and prefer an orange ball if the background is white.
 COLORS = {
     "orange": (np.array([3, 110, 110], np.uint8), np.array([22, 255, 255], np.uint8)),
-    "white": (np.array([0, 0, 170], np.uint8), np.array([180, 60, 255], np.uint8)),
+    "white": (np.array([0, 0, 170], np.uint8), np.array([180, 120, 255], np.uint8)),  # S up to 120: red rubber tints the ball pink
 }
 LO, HI = COLORS["orange"]
 # Region of interest (x0, x1, y0, y1 in -1..1 image units) or None = whole image. With the blade edge-on, a ball on it stays in the
 # strip right of the blade line and above the handle (sim and real: ball at the blade centre ~ x +0.2, y -0.2).
 # On by default for "white", where background, handle and printed parts would otherwise give false balls.
-ROI_BLADE = (-0.1, 0.65, -1.0, 0.15)
+ROI_BLADE = (0.02, 0.65, -1.0, 0.15)  # x0 just right of the blade line: excludes the bright handle/blade edge
 ROI = None
 
 

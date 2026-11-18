@@ -10,7 +10,10 @@ Each run is logged to logs/real_<time>.npz.
 """
 import argparse
 import json
+import os
 import sys
+
+os.environ.setdefault("OMP_NUM_THREADS", "1")  # tiny MLPs: one thread. Default (one per core) starved the other arm's process
 import threading
 import time
 from pathlib import Path
@@ -31,6 +34,9 @@ from perception.detector import detect
 from sim.env import FdVel
 from perception.estimator import EstRunner, load_est
 from sim.policies import load_controller, controller_action
+import torch
+
+torch.set_num_threads(1); cv2.setNumThreads(1)
 
 JOINTS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
 HZ, ACTION_SCALE = 30, 0.04
@@ -254,7 +260,7 @@ def main():
     rec = None
     if a.record > 0:
         h, w = latest["f"].shape[:2]
-        rec_path = out / f"real_{time.strftime('%H%M%S')}.mp4"
+        rec_path = out / f"real_{a.arm or 'arm'}_{time.strftime('%H%M%S')}.mp4"
         rec = cv2.VideoWriter(str(rec_path), cv2.VideoWriter_fourcc(*"mp4v"), HZ, (w, h))
         print(f"recording the first {a.record:.0f} s to {rec_path}")
     print("ARMED: put the ball on the blade centre (it starts as soon as it sees the ball 5 frames in a row). Runs until Ctrl+C.")
@@ -324,7 +330,7 @@ def main():
     print(f"\nSTOPPED: {why}." + ("" if a.dry else " Torque is still ON (arm holds; release: uv run python -m hardware.torque_off)."))
     for i, (dur, w) in enumerate(episodes):
         print(f"  attempt {i + 1}: balanced {dur:6.1f} s, ended by: {w}")
-    f = out / f"real_{time.strftime('%H%M%S')}{'_dry' if a.dry else ''}.npz"
+    f = out / f"real_{a.arm or 'arm'}_{time.strftime('%H%M%S')}{'_dry' if a.dry else ''}.npz"
     np.savez(f, **{k: np.array(v) for k, v in log.items()}, why=why)
     print(f"log: {f}")
 
