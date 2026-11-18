@@ -15,6 +15,8 @@ import numpy as np
 from lerobot.robots.so_follower.config_so_follower import SOFollowerRobotConfig
 from lerobot.robots.so_follower.so_follower import SOFollower
 
+from hardware.xlerobot import add_arm_arg, apply_arm
+
 ROOT = Path(__file__).parent.parent
 JOINTS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
 PARTS = ["base turn", "upper arm", "forearm", "wrist tilt", "wrist twist"]
@@ -26,7 +28,8 @@ def main():
     ap.add_argument("--port", default="/dev/ttyACM0")
     ap.add_argument("--id", default="my_follower_arm", help="LeRobot calibration id of your arm")
     ap.add_argument("--save", default=str(ROOT / "hardware/home.json"))
-    a = ap.parse_args()
+    add_arm_arg(ap)
+    a = apply_arm(ap.parse_args(), ap)
     robot = SOFollower(SOFollowerRobotConfig(port=a.port, id=a.id, disable_torque_on_disconnect=False))
     robot.bus.connect()
     tgt = np.array(TARGET)

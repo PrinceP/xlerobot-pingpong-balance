@@ -24,6 +24,8 @@ from lerobot.robots.so_follower.config_so_follower import SOFollowerRobotConfig
 from lerobot.robots.so_follower.so_follower import SOFollower
 
 from hardware.camera import open_camera
+from hardware.xlerobot import add_arm_arg, apply_arm
+from perception import detector
 from hardware.pose_guide import TARGET
 from perception.detector import detect
 from sim.env import FdVel
@@ -100,6 +102,9 @@ def main():
     ap.add_argument("--home", default=str(ROOT / "hardware/home.json"), help="your level-paddle home pose (made by hardware.pose_guide)")
     ap.add_argument("--cam", default="/dev/video4"); ap.add_argument("--port", default="/dev/ttyACM0")
     ap.add_argument("--id", default="my_follower_arm", help="LeRobot calibration id of your arm")
+    add_arm_arg(ap)
+    ap.add_argument("--cam-size", default="640x480", help="camera capture size WxH (the pipeline resizes to 128x96)")
+    ap.add_argument("--ball", choices=sorted(detector.COLORS), default="orange", help="ball colour for the detector")
     ap.add_argument("--seconds", type=float, default=0, help="total run time; 0 = until Ctrl+C")
     ap.add_argument("--r-corr", type=float, default=1.1, help="divide the real blob radius by this (the real ball looks ~10%% bigger than in sim)")
     ap.add_argument("--max-dev", type=float, default=25, help="stop if any joint target goes this many degrees from home")
@@ -114,16 +119,17 @@ def main():
     ap.add_argument("--dry", action="store_true", help="no motor writes at all (torque untouched)")
     ap.add_argument("--record", type=float, default=0, help="save the wrist camera (640x480) for this many seconds from the moment the arm is at home, "
                     "to logs/real_<time>.mp4; 0 = off")
-    a = ap.parse_args()
+    a = apply_arm(ap.parse_args(), ap)
+    detector.set_color(a.ball)
 
     have_home = Path(a.home).exists()
     if not have_home and not a.grip_only:
-        raise SystemExit(f"no home pose at {a.home}: clamp the paddle with `--grip-only`, then run `uv run python -m hardware.pose_guide` (format: hardware/home_example.json)")
+        raise SystemExit(f"no home pose at {a.home}: clamp the paddle with `--grip-only`, then run `python -m hardware.pose_guide` with the same --arm/--id (format: hardware/home_example.json)")
     home = np.array([json.load(open(a.home))[f"{j}.pos"] for j in JOINTS] if have_home else TARGET)  # no saved home yet: the sim home
     controller = load_controller(a.controller)
     est = EstRunner(load_est(a.est))
     fd = FdVel()
-    cap = None if a.grip_only and not a.dry else open_camera(a.cam)  # clamping the paddle needs no camera
+    cap = None if a.grip_only and not a.dry else open_camera(a.cam, a.cam_size)  # clamping the paddle needs no camera
     latest, stop = {}, [False]
 
     def grab():

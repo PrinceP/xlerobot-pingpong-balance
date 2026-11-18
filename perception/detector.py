@@ -1,4 +1,4 @@
-"""Orange-ball colour detector, the same code in sim and on the real camera.
+"""Ball colour detector (orange by default), the same code in sim and on the real camera.
 
 detect(rgb uint8 (96, 128, 3)) -> float32 [x, y, r, visible]
     x, y     blob centre, -1..1 across the image
@@ -10,7 +10,20 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-LO, HI = np.array([3, 110, 110], np.uint8), np.array([22, 255, 255], np.uint8)  # HSV, OpenCV units (H 0-180)
+# HSV thresholds, OpenCV units (H 0-180). "orange" is the original, used in sim and for the shipped weights.
+# "white" (XLeRobot, for a white ball on the black rubber): low saturation, bright. It also matches white walls and the white printed arm
+# parts, so check it on live frames (python -m hardware.ball_view) and prefer an orange ball if the background is white.
+COLORS = {
+    "orange": (np.array([3, 110, 110], np.uint8), np.array([22, 255, 255], np.uint8)),
+    "white": (np.array([0, 0, 170], np.uint8), np.array([180, 60, 255], np.uint8)),
+}
+LO, HI = COLORS["orange"]
+
+
+def set_color(name: str) -> None:
+    """Switch the ball colour for this process (the sim always renders orange)."""
+    global LO, HI
+    LO, HI = COLORS[name]
 KERNEL = np.ones((3, 3), np.uint8)
 MIN_AREA, MAX_AREA = 40, 1200  # px; the ball is ~180 px at the blade centre. 40 rejects small orange specks in the background
 

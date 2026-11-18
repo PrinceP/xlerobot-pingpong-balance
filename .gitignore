@@ -19,6 +19,8 @@ dist/
 
 # Your own arm's home pose (hardware.pose_guide)
 /hardware/home.json
+/hardware/home_left.json
+/hardware/home_right.json
 
 # Secrets
 .env
@@ -28,3 +30,5 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+/hardware/home_left.json
+/hardware/home_right.json

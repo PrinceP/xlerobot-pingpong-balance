@@ -9,10 +9,13 @@ import time
 from lerobot.robots.so_follower.config_so_follower import SOFollowerRobotConfig
 from lerobot.robots.so_follower.so_follower import SOFollower
 
+from hardware.xlerobot import add_arm_arg, apply_arm
+
 ap = argparse.ArgumentParser()
 ap.add_argument("motors", nargs="*"); ap.add_argument("--port", default="/dev/ttyACM0")
 ap.add_argument("--id", default="my_follower_arm", help="LeRobot calibration id of your arm")
-a = ap.parse_args()
+add_arm_arg(ap)
+a = apply_arm(ap.parse_args(), ap)
 motors = a.motors or None
 robot = SOFollower(SOFollowerRobotConfig(port=a.port, id=a.id, disable_torque_on_disconnect=False))
 robot.bus.connect()

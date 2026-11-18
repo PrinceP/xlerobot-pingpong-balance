@@ -14,6 +14,7 @@ from lerobot.robots.so_follower.config_so_follower import SOFollowerRobotConfig
 from lerobot.robots.so_follower.so_follower import SOFollower
 
 from hardware.camera import open_camera
+from hardware.xlerobot import add_arm_arg, apply_arm
 
 STEP_MS = 1000 / 30
 
@@ -34,13 +35,14 @@ def cross(t, x, t_cmd, fracs=(0.1, 0.5)):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("port"); p.add_argument("cam", nargs="?", default="/dev/video4")
+    p.add_argument("port", nargs="?", default="/dev/ttyACM0"); p.add_argument("cam", nargs="?", default="/dev/video4")
+    add_arm_arg(p); p.add_argument("--cam-size", default="640x480")
     p.add_argument("--id", default="my_follower_arm", help="LeRobot calibration id of your arm")
     p.add_argument("--trials", type=int, default=8); p.add_argument("--deg", type=float, default=6.0)
     p.add_argument("--kp", type=int, default=32, help="servo P gain: keep it the same as in run_real")
-    a = p.parse_args()
+    a = apply_arm(p.parse_args(), p)
 
-    cap = open_camera(a.cam)
+    cap = open_camera(a.cam, a.cam_size)
     frames, stop = [], False
 
     def grab():
