@@ -1,4 +1,19 @@
-# SO-101 ping-pong ball balancing
+# XLeRobot ping-pong ball balancing (two arms)
+
+Both SO-101 arms of an [XLeRobot](https://github.com/Vector-Wangel/XLeRobot) each hold a table-tennis paddle and balance a ping-pong
+ball on it, at the same time. Each arm senses its ball with its own wrist camera.
+
+> **Acknowledgement.** This project is built on [zecice/so101-pingpong-balance](https://github.com/zecice/so101-pingpong-balance)
+> by **zecice** (MIT): the MuJoCo environment, PPO controller, ball detector + estimator, pretrained weights and the real-arm loop
+> all come from that work, and its full commit history is kept here. Please star and cite the original.
+> Additional asset credits: SO-101 model files by TheRobotStudio (Apache-2.0), paddle mesh by Samuel Galla and Tim Huber (MIT),
+> see `assets/so101/README.md`.
+
+What changes for XLeRobot is tracked in [docs/XLEROBOT.md](docs/XLEROBOT.md). The original README follows.
+
+---
+
+## Original project: SO-101 ping-pong ball balancing
 
 A low-cost [SO-101](https://github.com/TheRobotStudio/SO-ARM100) arm balances a ping-pong ball on a table-tennis paddle. **The wrist camera is its
 only sensor for the ball**; the rest is the arm's own joint readings. The controller is trained with PPO in MuJoCo and runs unchanged on the real arm.
@@ -34,7 +49,7 @@ barely saw the real ball. A plain colour detector + a tiny estimator replaced it
 ## Install
 
 ```bash
-git clone https://github.com/zecice/so101-pingpong-balance && cd so101-pingpong-balance
+git clone https://github.com/PrinceP/xlerobot-pingpong-balance && cd xlerobot-pingpong-balance
 uv sync                      # sim only
 uv sync --extra hardware     # + LeRobot / Feetech drivers for the real arm
 ```
