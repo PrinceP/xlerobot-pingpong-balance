@@ -18,19 +18,31 @@ COLORS = {
     "white": (np.array([0, 0, 170], np.uint8), np.array([180, 60, 255], np.uint8)),
 }
 LO, HI = COLORS["orange"]
+# Region of interest (x0, x1, y0, y1 in -1..1 image units) or None = whole image. With the blade edge-on, a ball on it stays in the
+# strip right of the blade line and above the handle (sim and real: ball at the blade centre ~ x +0.2, y -0.2).
+# On by default for "white", where background, handle and printed parts would otherwise give false balls.
+ROI_BLADE = (-0.1, 0.65, -1.0, 0.15)
+ROI = None
 
 
-def set_color(name: str) -> None:
-    """Switch the ball colour for this process (the sim always renders orange)."""
-    global LO, HI
+def set_color(name: str, roi="auto") -> None:
+    """Switch the ball colour for this process (the sim always renders orange). roi: "auto" (ROI_BLADE for white), None or a tuple."""
+    global LO, HI, ROI
     LO, HI = COLORS[name]
+    ROI = (ROI_BLADE if name == "white" else None) if roi == "auto" else roi
 KERNEL = np.ones((3, 3), np.uint8)
 MIN_AREA, MAX_AREA = 40, 1200  # px; the ball is ~180 px at the blade centre. 40 rejects small orange specks in the background
 
 
 def mask(rgb: np.ndarray) -> np.ndarray:
-    """Orange pixels, with a 3x3 opening to remove speckle."""
-    return cv2.morphologyEx(cv2.inRange(cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV), LO, HI), cv2.MORPH_OPEN, KERNEL)
+    """Ball-coloured pixels inside the ROI, with a 3x3 opening to remove speckle."""
+    m = cv2.morphologyEx(cv2.inRange(cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV), LO, HI), cv2.MORPH_OPEN, KERNEL)
+    if ROI is not None:
+        h, w = m.shape
+        x0, x1, y0, y1 = ((np.array(ROI) + 1) / 2 * np.array([w, w, h, h])).round().astype(int)
+        keep = np.zeros_like(m); keep[max(0, y0):y1, max(0, x0):x1] = 255
+        m = cv2.bitwise_and(m, keep)
+    return m
 
 
 def detect(rgb: np.ndarray) -> np.ndarray:
