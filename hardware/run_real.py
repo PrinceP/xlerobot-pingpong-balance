@@ -179,7 +179,13 @@ def main():
             # torque already on (a previous run clamped the paddle): keep its squeezing goal. Goal = present would drop the squeeze
             # until the prompt is answered, and a cantilevered paddle slides out of the jaws meanwhile (XLeRobot left arm did).
             g0 = bus.read("Goal_Position", "gripper")
-        bus.sync_write("Goal_Position", {**{j: float(v) for j, v in zip(JOINTS, q0)}, "gripper": float(g0)})  # torque still off: goal = present, so no jump
+        goal0 = q0.copy()
+        if all(bus.sync_read("Torque_Enable", normalize=False).values()):
+            # torque already on (a previous run or jog holds the arm): keep its goals. They include the sag compensation; goal = present
+            # lets the arm droop ~1 deg while starting, which tips the paddle and rolls a resting ball off.
+            g = bus.sync_read("Goal_Position")
+            goal0 = np.array([g[j] for j in JOINTS])
+        bus.sync_write("Goal_Position", {**{j: float(v) for j, v in zip(JOINTS, goal0)}, "gripper": float(g0)})  # no jump when torque goes on
         robot.configure()  # gains (P=--kp, D=32), then torque ON holding q0
         print(f"torque ON (P={a.kp}), holding the current pose")
         if a.grip_load > 0:
@@ -228,7 +234,7 @@ def main():
             return
     bias = np.zeros(5)  # extra command that holds the arm at home against gravity sag
     if not a.dry:
-        goal = home.copy() if far else q0.copy()
+        goal = home.copy() if far else goal0.copy()
         for _ in range(60):  # 2 s: adjust the command until the joints sit at home
             q = read()
             goal = home + np.clip(goal - home + 0.25 * (home - q), -12, 12)
