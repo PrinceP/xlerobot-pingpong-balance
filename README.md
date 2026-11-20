@@ -7,6 +7,12 @@ MuJoCo and used here unchanged.
 **Videos (on X):** [video 1](https://x.com/x_princep/status/2122936066957017416) ·
 [video 2](https://x.com/x_princep/status/2122927733626024409)
 
+![Left and right wrist cameras while both arms balance a ping-pong ball](assets/videos/both_arms_wrist.gif)
+
+*What the controller sees: the left and right wrist cameras during the two-arm run, side by side (rotated so up is up; the paddle is
+clamped edge-on, the ball sits on top of the blade). Full 25 s clip, from placing the balls to balancing:
+[assets/videos/both_arms_wrist.mp4](assets/videos/both_arms_wrist.mp4).*
+
 **Results on the real robot:** both arms balanced at the same time, each on its first attempt, for about 4 minutes (left 249 s,
 right 245 s). Pretrained weights, no retraining.
 

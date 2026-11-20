@@ -15,6 +15,7 @@ dist/
 /logs/
 /wandb/
 *.mp4
+!assets/videos/*.mp4
 *.tmp
 
 # Your own arm's home pose (hardware.pose_guide)
